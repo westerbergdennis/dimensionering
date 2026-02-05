@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Dimensioneringskalkylator – Lägenheter</title>
+  <style>
+    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    body { margin: 20px; color: #111; }
+    h1 { font-size: 20px; margin: 0 0 8px; }
+    p  { margin: 6px 0 14px; color: #333; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 14px; }
+    .controls { display:flex; gap:12px; flex-wrap:wrap; align-items:end; margin-bottom: 12px; }
+    .control { display:flex; flex-direction:column; gap:6px; }
+    label { font-size: 12px; letter-spacing: .02em; text-transform: uppercase; color: #555; }
+    input[type="number"], select { padding: 8px 10px; border: 1px solid #ccc; border-radius: 10px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 10px 8px; border-bottom: 1px solid #eee; vertical-align: top; }
+    th { text-align: left; font-size: 12px; letter-spacing: .02em; text-transform: uppercase; color: #555; }
+    .muted { color: #666; font-size: 12px; }
+    .pill { display:inline-block; padding: 2px 8px; border: 1px solid #ddd; border-radius: 999px; font-size: 12px; color:#333; }
+    .right { text-align:right; }
+    .total { margin-top: 12px; display:flex; gap:10px; flex-wrap:wrap; }
+    .total .box { border: 1px solid #eee; border-radius: 12px; padding: 10px 12px; }
+    .box b { display:block; margin-bottom: 4px; }
+    .warn { color:#8a4b00; }
+    .small { font-size: 12px; }
+  </style>
+</head>
+<body>
+  <h1>Dimensioneringskalkylator – Lägenheter (mål: minsta antal kärl)</h1>
+  <p class="muted">
+    Ange antal lägenheter och nivå (Låg/Normal/Hög). Kalkylatorn räknar fram <b>liter per vecka</b> per fraktion (liter/hushåll·vecka × antal lägenheter),
+    räknar om till <b>liter per tömning</b> utifrån valt tömningsintervall och föreslår kärlkombination som ger <b>minsta antal kärl</b>
+    (vid lika: <b>minsta överkapacitet</b>).
+  </p>
+
+  <div class="card">
+    <div class="controls">
+      <div class="control">
+        <label for="apt">Antal lägenheter</label>
+        <input id="apt" type="number" min="0" step="1" value="10" />
+      </div>
+      <div class="control">
+        <label for="scenario">Nivå</label>
+        <select id="scenario">
+          <option value="low">Låg</option>
+          <option value="normal" selected>Normal</option>
+          <option value="high">Hög</option>
+        </select>
+      </div>
+      <div class="control">
+        <label>Regel för “optimal”</label>
+        <div class="pill">Minsta antal kärl</div>
+      </div>
+    </div>
+
+    <table id="tbl">
+      <thead>
+        <tr>
+          <th>Fraktion</th>
+          <th class="right">Liter / hushåll &amp; vecka</th>
+          <th class="right">Liter / vecka (totalt)</th>
+          <th>Tömningsintervall</th>
+          <th class="right">Behov (L/tömning)</th>
+          <th>Förslag (kärl)</th>
+          <th class="right">Kapacitet</th>
+          <th class="right">Överkap.</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <div class="total" id="totals"></div>
+    <p class="muted warn small" id="note"></p>
+  </div>
+
+<script>
+  const RATES = {
+    "Matavfall":   { low: 5,   normal: 10,  high: 15 },
+    "Restavfall":  { low: 40,  normal: 50,  high: 60 },
+    "Returpapper": { low: 2.5, normal: 5,   high: 7.5 },
+    "Pappersförpackningar och Wellpapp": { low: 40, normal: 50, high: 60 },
+    "Plastförpackningar": { low: 20, normal: 30, high: 40 },
+    "Metallförpackningar": { low: 1, normal: 2, high: 3 },
+    "Ofärgat glas": { low: 1, normal: 2, high: 3 },
+    "Färgat glas":  { low: 1, normal: 2, high: 3 },
+  };
+
+  // --- Kärl & tömningsintervall per fraktion ---
+  const FRACTIONS = [
+    { name: "Matavfall", sizes: [140], intervals: ["Varannan v.", "Varje v.", "2ggr i v."] },
+    { name: "Restavfall", sizes: [190, 370, 660], intervals: ["Varannan v.", "Varje v.", "2ggr i v."] },
+    { name: "Returpapper", sizes: [190, 370, 660], intervals: ["Var fjärde v.", "Varannan v.", "Varje v.", "2ggr i v."] }, // antagande
+    { name: "Pappersförpackningar och Wellpapp", sizes: [190, 370, 660], intervals: ["Var fjärde v.", "Varannan v.", "Varje v.", "2ggr i v."] },
+    { name: "Plastförpackningar", sizes: [190, 370, 660], intervals: ["Var fjärde v.", "Varannan v.", "Varje v.", "2ggr i v."] },
+    { name: "Metallförpackningar", sizes: [190, 370], intervals: ["Var åttonde v.", "Var fjärde v.", "Varannan v."] },
+    { name: "Ofärgat glas", sizes: [190, 370], intervals: ["Var åttonde v.", "Var fjärde v.", "Varannan v."] },
+    { name: "Färgat glas", sizes: [190, 370], intervals: ["Var åttonde v.", "Var fjärde v.", "Varannan v."] },
+  ];
+
+  // Mappar intervalltext → veckor mellan tömningar (2ggr/vecka = 0.5 vecka)
+  const INTERVAL_WEEKS = {
+    "2ggr i v.": 0.5,
+    "Varje v.": 1,
+    "Varannan v.": 2,
+    "Var fjärde v.": 4,
+    "Var åttonde v.": 8,
+  };
+
+  // Standardval för tömningsintervall (vid start)
+  const DEFAULT_INTERVALS = {
+    "Matavfall": "Varje v.",
+    "Restavfall": "Varje v.",
+    "Returpapper": "Var fjärde v.",
+    "Pappersförpackningar och Wellpapp": "Varannan v.",
+    "Plastförpackningar": "Varannan v.",
+    "Metallförpackningar": "Var fjärde v.",
+    "Ofärgat glas": "Var fjärde v.",
+    "Färgat glas": "Var fjärde v.",
+  };
+
+  function format1(n) {
+    if (!Number.isFinite(n)) return "–";
+    const v = Math.round(n * 10) / 10;
+    return v.toString().replace(".", ",");
+  }
+  function formatInt(n) {
+    return Number.isFinite(n) ? Math.round(n).toString() : "–";
+  }
+
+  // Optimering: minimera antal kärl, vid lika minimera överkapacitet
+  function optimizeBins(need, sizes) {
+    if (!(need > 0)) return { counts: new Array(sizes.length).fill(0), bins: 0, cap: 0, over: 0 };
+
+    const minSize = Math.min(...sizes);
+    const maxBins = Math.max(1, Math.ceil(need / minSize) + 3);
+    let best = null;
+
+    for (let totalBins = 1; totalBins <= maxBins; totalBins++) {
+      if (sizes.length === 1) {
+        const cap = totalBins * sizes[0];
+        if (cap >= need) {
+          best = { counts:[totalBins], bins: totalBins, cap, over: cap - need };
+          break;
+        }
+      } else if (sizes.length === 2) {
+        for (let c0 = 0; c0 <= totalBins; c0++) {
+          const c1 = totalBins - c0;
+          const cap = c0 * sizes[0] + c1 * sizes[1];
+          if (cap >= need) {
+            const candidate = { counts:[c0,c1], bins: totalBins, cap, over: cap - need };
+            if (!best || candidate.over < best.over) best = candidate;
+          }
+        }
+        if (best) break;
+      } else if (sizes.length === 3) {
+        for (let c0 = 0; c0 <= totalBins; c0++) {
+          for (let c1 = 0; c1 <= totalBins - c0; c1++) {
+            const c2 = totalBins - c0 - c1;
+            const cap = c0 * sizes[0] + c1 * sizes[1] + c2 * sizes[2];
+            if (cap >= need) {
+              const candidate = { counts:[c0,c1,c2], bins: totalBins, cap, over: cap - need };
+              if (!best || candidate.over < best.over) best = candidate;
+            }
+          }
+        }
+        if (best) break;
+      } else {
+        const k = sizes.length;
+        const counts = new Array(k).fill(0);
+        function dfs(idx, remainingBins) {
+          if (idx === k - 1) {
+            counts[idx] = remainingBins;
+            let cap = 0;
+            for (let i=0;i<k;i++) cap += counts[i]*sizes[i];
+            if (cap >= need) {
+              const candidate = { counts:[...counts], bins: totalBins, cap, over: cap - need };
+              if (!best || candidate.over < best.over) best = candidate;
+            }
+            return;
+          }
+          for (let c=0;c<=remainingBins;c++) {
+            counts[idx]=c;
+            dfs(idx+1, remainingBins-c);
+          }
+        }
+        dfs(0, totalBins);
+        if (best) break;
+      }
+    }
+
+    if (!best) {
+      const maxSize = Math.max(...sizes);
+      const bins = Math.ceil(need / maxSize);
+      const cap = bins * maxSize;
+      return { counts: sizes.map(s => (s===maxSize ? bins : 0)), bins, cap, over: cap - need };
+    }
+    return best;
+  }
+
+  function comboText(sizes, counts) {
+    const parts = [];
+    for (let i=0;i<sizes.length;i++) if (counts[i] > 0) parts.push(`${counts[i]}×${sizes[i]}L`);
+    return parts.length ? parts.join(" + ") : "–";
+  }
+
+  function getRatePerHousehold(fracName, scenarioKey) {
+    const r = RATES[fracName];
+    return r ? (r[scenarioKey] ?? 0) : 0;
+  }
+
+  function makeRow(frac, idx) {
+    const tr = document.createElement("tr");
+
+    const tdName = document.createElement("td");
+    tdName.innerHTML = `<b>${frac.name}</b><div class="muted">Tillåtna kärl: ${frac.sizes.join(", ")}L</div>`;
+    tr.appendChild(tdName);
+
+    const tdRate = document.createElement("td");
+    tdRate.className = "right";
+    tdRate.id = `rate_${idx}`;
+    tdRate.textContent = "0";
+    tr.appendChild(tdRate);
+
+    const tdWeek = document.createElement("td");
+    tdWeek.className = "right";
+    tdWeek.id = `week_${idx}`;
+    tdWeek.textContent = "0";
+    tr.appendChild(tdWeek);
+
+    const tdInt = document.createElement("td");
+    const sel = document.createElement("select");
+    sel.id = `int_${idx}`;
+    for (const it of frac.intervals) {
+      const opt = document.createElement("option");
+      opt.value = it;
+      opt.textContent = it;
+      sel.appendChild(opt);
+    }
+    // Sätt standardval enligt DEFAULT_INTERVALS (om det finns och är tillåtet)
+    const def = DEFAULT_INTERVALS[frac.name];
+    if (def && frac.intervals.includes(def)) sel.value = def;
+
+    tdInt.appendChild(sel);
+    tr.appendChild(tdInt);
+
+    const tdNeed = document.createElement("td");
+    tdNeed.className = "right";
+    tdNeed.id = `need_${idx}`;
+    tdNeed.textContent = "0";
+    tr.appendChild(tdNeed);
+
+    const tdSug = document.createElement("td");
+    tdSug.id = `sug_${idx}`;
+    tdSug.innerHTML = `<span class="pill">–</span>`;
+    tr.appendChild(tdSug);
+
+    const tdCap = document.createElement("td");
+    tdCap.className = "right";
+    tdCap.id = `cap_${idx}`;
+    tdCap.textContent = "0";
+    tr.appendChild(tdCap);
+
+    const tdOver = document.createElement("td");
+    tdOver.className = "right";
+    tdOver.id = `over_${idx}`;
+    tdOver.textContent = "0";
+    tr.appendChild(tdOver);
+
+    function recalcRow() {
+      const apt = parseFloat(document.getElementById("apt").value || "0") || 0;
+      const scenarioKey = document.getElementById("scenario").value;
+
+      const rate = getRatePerHousehold(frac.name, scenarioKey);
+      const perWeek = rate * apt;
+
+      const interval = sel.value;
+      const weeks = INTERVAL_WEEKS[interval];
+      const need = perWeek * weeks;
+
+      const best = optimizeBins(need, frac.sizes);
+      const sug = comboText(frac.sizes, best.counts);
+
+      document.getElementById(`rate_${idx}`).textContent = format1(rate);
+      document.getElementById(`week_${idx}`).textContent = format1(perWeek);
+      document.getElementById(`need_${idx}`).textContent = format1(need);
+      document.getElementById(`sug_${idx}`).innerHTML = `<span class="pill">${sug}</span><div class="muted">${best.bins} kärl</div>`;
+      document.getElementById(`cap_${idx}`).textContent = format1(best.cap);
+      document.getElementById(`over_${idx}`).textContent = format1(best.over);
+
+      updateTotals();
+    }
+
+    sel.addEventListener("change", recalcRow);
+    tr.recalcRow = recalcRow;
+
+    setTimeout(recalcRow, 0);
+    return tr;
+  }
+
+  function updateTotals() {
+    let sumWeek = 0, sumNeed = 0, sumCap = 0, sumOver = 0, sumBins = 0;
+
+    FRACTIONS.forEach((f, idx) => {
+      const week = parseFloat((document.getElementById(`week_${idx}`).textContent || "0").replace(",", ".")) || 0;
+      const need = parseFloat((document.getElementById(`need_${idx}`).textContent || "0").replace(",", ".")) || 0;
+      const cap  = parseFloat((document.getElementById(`cap_${idx}`).textContent  || "0").replace(",", ".")) || 0;
+      const over = parseFloat((document.getElementById(`over_${idx}`).textContent || "0").replace(",", ".")) || 0;
+
+      const sugText = document.getElementById(`sug_${idx}`).innerText || "";
+      const m = sugText.match(/(\d+)\s*kärl/);
+      const bins = m ? parseInt(m[1],10) : 0;
+
+      sumWeek += week;
+      sumNeed += need;
+      sumCap  += cap;
+      sumOver += over;
+      sumBins += bins;
+    });
+
+    const totals = document.getElementById("totals");
+    totals.innerHTML = `
+      <div class="box"><b>Totalt (L/vecka)</b>${format1(sumWeek)}</div>
+      <div class="box"><b>Totalt behov (L/tömning)</b>${format1(sumNeed)}</div>
+      <div class="box"><b>Total kapacitet (L/tömning)</b>${format1(sumCap)}</div>
+      <div class="box"><b>Total överkapacitet</b>${format1(sumOver)}</div>
+      <div class="box"><b>Totalt antal kärl</b>${formatInt(sumBins)}</div>
+    `;
+  }
+
+  // Render tabell
+  const tbody = document.querySelector("#tbl tbody");
+  const ROWS = [];
+  FRACTIONS.forEach((frac, idx) => {
+    const tr = makeRow(frac, idx);
+    ROWS.push(tr);
+    tbody.appendChild(tr);
+  });
+
+  function recalcAll() {
+    ROWS.forEach(tr => tr.recalcRow && tr.recalcRow());
+    const note = document.getElementById("note");
+    note.textContent =
+      "Obs: Optimering = minsta antal kärl. Vid lika antal kärl väljs kombinationen med minsta överkapacitet. ";
+  }
+
+  document.getElementById("apt").addEventListener("input", recalcAll);
+  document.getElementById("scenario").addEventListener("change", recalcAll);
+  setTimeout(recalcAll, 0);
+</script>
+</body>
+</html>
