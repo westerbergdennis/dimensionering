@@ -4,75 +4,362 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Dimensioneringskalkylator – Lägenheter</title>
+
   <style>
-    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
-    body { margin: 20px; color: #111; }
-    h1 { font-size: 20px; margin: 0 0 8px; }
-    p  { margin: 6px 0 14px; color: #333; }
-    .card { border: 1px solid #ddd; border-radius: 12px; padding: 14px; }
-    .controls { display:flex; gap:12px; flex-wrap:wrap; align-items:end; margin-bottom: 12px; }
-    .control { display:flex; flex-direction:column; gap:6px; }
-    label { font-size: 12px; letter-spacing: .02em; text-transform: uppercase; color: #555; }
-    input[type="number"], select { padding: 8px 10px; border: 1px solid #ccc; border-radius: 10px; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { padding: 10px 8px; border-bottom: 1px solid #eee; vertical-align: top; }
-    th { text-align: left; font-size: 12px; letter-spacing: .02em; text-transform: uppercase; color: #555; }
-    .muted { color: #666; font-size: 12px; }
-    .pill { display:inline-block; padding: 2px 8px; border: 1px solid #ddd; border-radius: 999px; font-size: 12px; color:#333; }
-    .right { text-align:right; }
-    .total { margin-top: 12px; display:flex; gap:10px; flex-wrap:wrap; }
-    .total .box { border: 1px solid #eee; border-radius: 12px; padding: 10px 12px; }
-    .box b { display:block; margin-bottom: 4px; }
-    .warn { color:#8a4b00; }
-    .small { font-size: 12px; }
+    /* ---------- Liquid Glass-ish design system ---------- */
+    :root{
+      --bg0: #f5f6f8;
+      --bg1: #ffffff;
+      --text: #0b0d12;
+      --muted: rgba(11,13,18,.68);
+
+      --glass: rgba(255,255,255,.62);
+      --glass-2: rgba(255,255,255,.42);
+      --stroke: rgba(10,16,28,.10);
+      --stroke-2: rgba(10,16,28,.14);
+
+      --shadow: 0 20px 60px rgba(16, 24, 40, .14);
+      --shadow-soft: 0 8px 24px rgba(16, 24, 40, .10);
+
+      --radius-xl: 22px;
+      --radius-lg: 16px;
+      --radius-md: 12px;
+
+      --blur: 18px;
+
+      --accent: #2f6bff;
+      --accent-2: #a855f7;
+      --warn: #9a5b00;
+
+      --focus: rgba(47,107,255,.25);
+
+      --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+
+    @media (prefers-color-scheme: dark){
+      :root{
+        --bg0: #070912;
+        --bg1: #0b0f1f;
+        --text: #f2f4f7;
+        --muted: rgba(242,244,247,.70);
+
+        --glass: rgba(16, 20, 40, .56);
+        --glass-2: rgba(16, 20, 40, .40);
+        --stroke: rgba(255,255,255,.12);
+        --stroke-2: rgba(255,255,255,.16);
+
+        --shadow: 0 26px 80px rgba(0, 0, 0, .46);
+        --shadow-soft: 0 10px 30px rgba(0, 0, 0, .34);
+
+        --focus: rgba(47,107,255,.35);
+        --warn: #ffb14a;
+      }
+    }
+
+    *{ box-sizing:border-box; }
+    html, body { height: 100%; }
+    body{
+      margin: 0;
+      font-family: var(--font);
+      color: var(--text);
+      background:
+        radial-gradient(1200px 600px at 15% 10%, rgba(47,107,255,.22), transparent 55%),
+        radial-gradient(900px 520px at 85% 15%, rgba(168,85,247,.18), transparent 60%),
+        radial-gradient(1200px 900px at 50% 105%, rgba(47,107,255,.10), transparent 60%),
+        linear-gradient(180deg, var(--bg0), var(--bg1));
+      overflow-x: hidden;
+    }
+
+    /* Subtle noise overlay */
+    body::before{
+      content:"";
+      position: fixed;
+      inset: 0;
+      pointer-events:none;
+      background-image:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='.18'/%3E%3C/svg%3E");
+      mix-blend-mode: overlay;
+      opacity: .18;
+    }
+
+    .wrap{
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: clamp(18px, 3vw, 34px);
+    }
+
+    header{
+      display:flex;
+      align-items:flex-end;
+      justify-content:space-between;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    h1{
+      font-size: clamp(18px, 2.3vw, 26px);
+      letter-spacing: -.02em;
+      margin: 0;
+      line-height: 1.15;
+    }
+
+    .sub{
+      margin: 8px 0 0;
+      color: var(--muted);
+      max-width: 78ch;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .card{
+      position: relative;
+      border-radius: var(--radius-xl);
+      background: linear-gradient(180deg, var(--glass), var(--glass-2));
+      border: 1px solid var(--stroke);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(var(--blur));
+      -webkit-backdrop-filter: blur(var(--blur));
+      overflow: hidden;
+    }
+
+    .card::after{
+      content:"";
+      position:absolute;
+      inset:-2px;
+      background:
+        radial-gradient(600px 200px at 15% 10%, rgba(255,255,255,.35), transparent 60%),
+        radial-gradient(500px 260px at 85% 0%, rgba(255,255,255,.20), transparent 60%);
+      opacity: .55;
+      pointer-events:none;
+      mix-blend-mode: soft-light;
+    }
+
+    .card-inner{
+      position: relative;
+      padding: clamp(14px, 2.2vw, 22px);
+      z-index: 1;
+    }
+
+    /* ---------- Controls ---------- */
+    .controls{
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 12px;
+      align-items: end;
+      margin-bottom: 14px;
+    }
+
+    .control{
+      display:flex;
+      flex-direction:column;
+      gap: 8px;
+      padding: 12px 12px;
+      border-radius: var(--radius-lg);
+      background: rgba(255,255,255,.22);
+      border: 1px solid var(--stroke);
+      box-shadow: var(--shadow-soft);
+      backdrop-filter: blur(var(--blur));
+      -webkit-backdrop-filter: blur(var(--blur));
+    }
+
+    @media (prefers-color-scheme: dark){
+      .control{ background: rgba(0,0,0,.18); }
+    }
+
+    .control:nth-child(1){ grid-column: span 3; }
+    .control:nth-child(2){ grid-column: span 3; }
+    .control:nth-child(3){ grid-column: span 6; display:flex; align-items:flex-start; justify-content:space-between; }
+
+    @media (max-width: 920px){
+      .control:nth-child(1),
+      .control:nth-child(2){ grid-column: span 6; }
+      .control:nth-child(3){ grid-column: span 12; }
+    }
+    @media (max-width: 520px){
+      .control:nth-child(1),
+      .control:nth-child(2),
+      .control:nth-child(3){ grid-column: span 12; }
+    }
+
+    label{
+      font-size: 11px;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      user-select:none;
+    }
+
+    input[type="number"], select{
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 14px;
+      border: 1px solid var(--stroke-2);
+      background: rgba(255,255,255,.72);
+      color: var(--text);
+      outline: none;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.35);
+      transition: border-color .15s ease, box-shadow .15s ease, transform .06s ease;
+      font-size: 14px;
+    }
+    @media (prefers-color-scheme: dark){
+      input[type="number"], select{
+        background: rgba(0,0,0,.30);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+      }
+    }
+
+    input[type="number"]:focus, select:focus{
+      border-color: rgba(47,107,255,.55);
+      box-shadow: 0 0 0 6px var(--focus);
+    }
+    input[type="number"]:active, select:active{
+      transform: translateY(1px);
+    }
+
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--stroke-2);
+      background: rgba(255,255,255,.52);
+      backdrop-filter: blur(var(--blur));
+      -webkit-backdrop-filter: blur(var(--blur));
+      font-size: 13px;
+      color: var(--text);
+      white-space: nowrap;
+    }
+    @media (prefers-color-scheme: dark){
+      .pill{ background: rgba(0,0,0,.22); }
+    }
+
+    .muted{ color: var(--muted); font-size: 12px; line-height: 1.35; }
+
+    /* ---------- Table ---------- */
+    .table-wrap{
+      border-radius: var(--radius-xl);
+      border: 1px solid var(--stroke);
+      background: rgba(255,255,255,.18);
+      overflow: hidden;
+      box-shadow: var(--shadow-soft);
+    }
+    @media (prefers-color-scheme: dark){
+      .table-wrap{ background: rgba(0,0,0,.16); }
+    }
+
+    .table-scroll{
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    table{
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 740px; /* horizontal scroll on small screens */
+    }
+
+    thead th{
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: linear-gradient(180deg, rgba(255,255,255,.64), rgba(255,255,255,.42));
+      backdrop-filter: blur(var(--blur));
+      -webkit-backdrop-filter: blur(var(--blur));
+      border-bottom: 1px solid var(--stroke);
+      text-align: left;
+      font-size: 11px;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 12px 10px;
+    }
+    @media (prefers-color-scheme: dark){
+      thead th{
+        background: linear-gradient(180deg, rgba(12,16,32,.72), rgba(12,16,32,.44));
+      }
+    }
+
+    tbody td{
+      padding: 12px 10px;
+      border-bottom: 1px solid rgba(0,0,0,.06);
+      vertical-align: top;
+      font-size: 14px;
+    }
+    @media (prefers-color-scheme: dark){
+      tbody td{ border-bottom: 1px solid rgba(255,255,255,.08); }
+    }
+
+    tbody tr{ transition: background .12s ease; }
+    tbody tr:hover{ background: rgba(47,107,255,.06); }
+    @media (prefers-color-scheme: dark){
+      tbody tr:hover{ background: rgba(47,107,255,.10); }
+    }
+
+    td select{
+      padding: 9px 10px;
+      border-radius: 12px;
+      font-size: 13px;
+    }
   </style>
 </head>
-<body>
-  <h1>Dimensioneringskalkylator – Lägenheter (mål: minsta antal kärl)</h1>
-  <p class="muted">
-    Ange antal lägenheter och nivå (Låg/Normal/Hög). Kalkylatorn räknar fram <b>liter per vecka</b> per fraktion (liter/hushåll·vecka × antal lägenheter),
-    räknar om till <b>liter per tömning</b> utifrån valt tömningsintervall och föreslår kärlkombination som ger <b>minsta antal kärl</b>
-    (vid lika: <b>minsta överkapacitet</b>).
-  </p>
 
-  <div class="card">
-    <div class="controls">
-      <div class="control">
-        <label for="apt">Antal lägenheter</label>
-        <input id="apt" type="number" min="0" step="1" value="10" />
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>Dimensioneringskalkylator – Lägenheter <span class="muted">(mål: minsta antal kärl)</span></h1>
+        <p class="sub">
+          Ange antal lägenheter och nivå (Låg/Normal/Hög). Kalkylatorn räknar fram <b>liter per vecka</b> per fraktion (liter/hushåll·vecka × antal lägenheter),
+          räknar om till <b>liter per tömning</b> utifrån valt tömningsintervall och föreslår kärlkombination som ger <b>minsta antal kärl</b>
+          (vid lika: <b>minsta överkapacitet</b>).
+        </p>
       </div>
-      <div class="control">
-        <label for="scenario">Nivå</label>
-        <select id="scenario">
-          <option value="low">Låg</option>
-          <option value="normal" selected>Normal</option>
-          <option value="high">Hög</option>
-        </select>
-      </div>
-      <div class="control">
-        <label>Regel för “optimal”</label>
-        <div class="pill">Minsta antal kärl</div>
+    </header>
+
+    <div class="card">
+      <div class="card-inner">
+
+        <div class="controls">
+          <div class="control">
+            <label for="apt">Antal lägenheter</label>
+            <input id="apt" type="number" min="0" step="1" value="10" />
+          </div>
+
+          <div class="control">
+            <label for="scenario">Nivå</label>
+            <select id="scenario">
+              <option value="low">Låg</option>
+              <option value="normal" selected>Normal</option>
+              <option value="high">Hög</option>
+            </select>
+          </div>
+
+          <div class="control">
+            <div style="display:flex; flex-direction:column; gap:8px; width:100%;">
+              <label>Regel för “optimal”</label>
+              <div class="pill">Minsta antal kärl</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <div class="table-scroll">
+            <table id="tbl">
+              <thead>
+                <tr>
+                  <th>Fraktion</th>
+                  <th>Tömningsintervall</th>
+                  <th>Förslag (kärl)</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
       </div>
     </div>
-
-    <table id="tbl">
-      <thead>
-        <tr>
-          <th>Fraktion</th>
-          <th class="right">Liter / hushåll &amp; vecka</th>
-          <th class="right">Liter / vecka (totalt)</th>
-          <th>Tömningsintervall</th>
-          <th class="right">Behov (L/tömning)</th>
-          <th>Förslag (kärl)</th>
-          <th class="right">Kapacitet</th>
-          <th class="right">Överkap.</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-
-    <div class="total" id="totals"></div>
-    <p class="muted warn small" id="note"></p>
   </div>
 
 <script>
@@ -120,13 +407,11 @@
     "Färgat glas": "Var fjärde v.",
   };
 
+  // (Behålls om man vill använda siffrorna senare – inte nödvändigt för UI)
   function format1(n) {
     if (!Number.isFinite(n)) return "–";
     const v = Math.round(n * 10) / 10;
     return v.toString().replace(".", ",");
-  }
-  function formatInt(n) {
-    return Number.isFinite(n) ? Math.round(n).toString() : "–";
   }
 
   // Optimering: minimera antal kärl, vid lika minimera överkapacitet
@@ -210,24 +495,15 @@
     return r ? (r[scenarioKey] ?? 0) : 0;
   }
 
+  // Intern state (beräkningar finns kvar, bara inte renderade som totals)
+  const ROW_STATE = [];
+
   function makeRow(frac, idx) {
     const tr = document.createElement("tr");
 
     const tdName = document.createElement("td");
     tdName.innerHTML = `<b>${frac.name}</b><div class="muted">Tillåtna kärl: ${frac.sizes.join(", ")}L</div>`;
     tr.appendChild(tdName);
-
-    const tdRate = document.createElement("td");
-    tdRate.className = "right";
-    tdRate.id = `rate_${idx}`;
-    tdRate.textContent = "0";
-    tr.appendChild(tdRate);
-
-    const tdWeek = document.createElement("td");
-    tdWeek.className = "right";
-    tdWeek.id = `week_${idx}`;
-    tdWeek.textContent = "0";
-    tr.appendChild(tdWeek);
 
     const tdInt = document.createElement("td");
     const sel = document.createElement("select");
@@ -238,35 +514,16 @@
       opt.textContent = it;
       sel.appendChild(opt);
     }
-    // Sätt standardval enligt DEFAULT_INTERVALS (om det finns och är tillåtet)
     const def = DEFAULT_INTERVALS[frac.name];
     if (def && frac.intervals.includes(def)) sel.value = def;
 
     tdInt.appendChild(sel);
     tr.appendChild(tdInt);
 
-    const tdNeed = document.createElement("td");
-    tdNeed.className = "right";
-    tdNeed.id = `need_${idx}`;
-    tdNeed.textContent = "0";
-    tr.appendChild(tdNeed);
-
     const tdSug = document.createElement("td");
     tdSug.id = `sug_${idx}`;
     tdSug.innerHTML = `<span class="pill">–</span>`;
     tr.appendChild(tdSug);
-
-    const tdCap = document.createElement("td");
-    tdCap.className = "right";
-    tdCap.id = `cap_${idx}`;
-    tdCap.textContent = "0";
-    tr.appendChild(tdCap);
-
-    const tdOver = document.createElement("td");
-    tdOver.className = "right";
-    tdOver.id = `over_${idx}`;
-    tdOver.textContent = "0";
-    tr.appendChild(tdOver);
 
     function recalcRow() {
       const apt = parseFloat(document.getElementById("apt").value || "0") || 0;
@@ -282,14 +539,12 @@
       const best = optimizeBins(need, frac.sizes);
       const sug = comboText(frac.sizes, best.counts);
 
-      document.getElementById(`rate_${idx}`).textContent = format1(rate);
-      document.getElementById(`week_${idx}`).textContent = format1(perWeek);
-      document.getElementById(`need_${idx}`).textContent = format1(need);
-      document.getElementById(`sug_${idx}`).innerHTML = `<span class="pill">${sug}</span><div class="muted">${best.bins} kärl</div>`;
-      document.getElementById(`cap_${idx}`).textContent = format1(best.cap);
-      document.getElementById(`over_${idx}`).textContent = format1(best.over);
+      // UI
+      document.getElementById(`sug_${idx}`).innerHTML =
+        `<span class="pill">${sug}</span><div class="muted">${best.bins} kärl</div>`;
 
-      updateTotals();
+      // State
+      ROW_STATE[idx] = { rate, perWeek, need, cap: best.cap, over: best.over, bins: best.bins };
     }
 
     sel.addEventListener("change", recalcRow);
@@ -297,36 +552,6 @@
 
     setTimeout(recalcRow, 0);
     return tr;
-  }
-
-  function updateTotals() {
-    let sumWeek = 0, sumNeed = 0, sumCap = 0, sumOver = 0, sumBins = 0;
-
-    FRACTIONS.forEach((f, idx) => {
-      const week = parseFloat((document.getElementById(`week_${idx}`).textContent || "0").replace(",", ".")) || 0;
-      const need = parseFloat((document.getElementById(`need_${idx}`).textContent || "0").replace(",", ".")) || 0;
-      const cap  = parseFloat((document.getElementById(`cap_${idx}`).textContent  || "0").replace(",", ".")) || 0;
-      const over = parseFloat((document.getElementById(`over_${idx}`).textContent || "0").replace(",", ".")) || 0;
-
-      const sugText = document.getElementById(`sug_${idx}`).innerText || "";
-      const m = sugText.match(/(\d+)\s*kärl/);
-      const bins = m ? parseInt(m[1],10) : 0;
-
-      sumWeek += week;
-      sumNeed += need;
-      sumCap  += cap;
-      sumOver += over;
-      sumBins += bins;
-    });
-
-    const totals = document.getElementById("totals");
-    totals.innerHTML = `
-      <div class="box"><b>Totalt (L/vecka)</b>${format1(sumWeek)}</div>
-      <div class="box"><b>Totalt behov (L/tömning)</b>${format1(sumNeed)}</div>
-      <div class="box"><b>Total kapacitet (L/tömning)</b>${format1(sumCap)}</div>
-      <div class="box"><b>Total överkapacitet</b>${format1(sumOver)}</div>
-      <div class="box"><b>Totalt antal kärl</b>${formatInt(sumBins)}</div>
-    `;
   }
 
   // Render tabell
@@ -340,9 +565,6 @@
 
   function recalcAll() {
     ROWS.forEach(tr => tr.recalcRow && tr.recalcRow());
-    const note = document.getElementById("note");
-    note.textContent =
-      "Obs: Optimering = minsta antal kärl. Vid lika antal kärl väljs kombinationen med minsta överkapacitet. ";
   }
 
   document.getElementById("apt").addEventListener("input", recalcAll);
